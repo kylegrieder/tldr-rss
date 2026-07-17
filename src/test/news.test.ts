@@ -1,6 +1,12 @@
+import { JSDOM } from "jsdom";
 import Parser from "rss-parser";
 
-import { fetchNews, getRSSFeed } from "../news";
+import {
+  extractPublishedDate,
+  fetchArticlePublishedDate,
+  fetchNews,
+  getRSSFeed,
+} from "../news";
 
 // Helper function to create a setTimeout mock that executes immediately
 function createMockSetTimeout(): jest.SpyInstance {
@@ -32,6 +38,81 @@ describe("fetchNews", () => {
       "https://invalid-url-that-does-not-exist.invalid",
     );
     expect(result).toEqual([]);
+  });
+});
+
+describe("extractPublishedDate", () => {
+  const docFrom = (html: string): Document => new JSDOM(html).window.document;
+
+  it("finds the date from article:published_time meta tag", () => {
+    const doc = docFrom(
+      `<html><head><meta property="article:published_time" content="2024-03-15T10:00:00Z"></head></html>`,
+    );
+    expect(extractPublishedDate(doc)).toBe("2024-03-15T10:00:00.000Z");
+  });
+
+  it("falls back to a time[datetime] element", () => {
+    const doc = docFrom(
+      `<html><body><time datetime="2024-01-02T08:30:00Z">Jan 2</time></body></html>`,
+    );
+    expect(extractPublishedDate(doc)).toBe("2024-01-02T08:30:00.000Z");
+  });
+
+  it("finds the date from JSON-LD structured data", () => {
+    const doc = docFrom(
+      `<html><head><script type="application/ld+json">${JSON.stringify({
+        "@type": "NewsArticle",
+        datePublished: "2024-05-20T14:00:00Z",
+      })}</script></head></html>`,
+    );
+    expect(extractPublishedDate(doc)).toBe("2024-05-20T14:00:00.000Z");
+  });
+
+  it("returns undefined when no date is present", () => {
+    const doc = docFrom(`<html><head></head><body>No date here</body></html>`);
+    expect(extractPublishedDate(doc)).toBeUndefined();
+  });
+
+  it("returns undefined for malformed JSON-LD instead of throwing", () => {
+    const doc = docFrom(
+      `<html><head><script type="application/ld+json">not json</script></head></html>`,
+    );
+    expect(extractPublishedDate(doc)).toBeUndefined();
+  });
+
+  it("ignores unparseable date values", () => {
+    const doc = docFrom(
+      `<html><head><meta name="date" content="not-a-date"></head></html>`,
+    );
+    expect(extractPublishedDate(doc)).toBeUndefined();
+  });
+});
+
+describe("fetchArticlePublishedDate", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("returns the published date extracted from the fetched page", async () => {
+    const axios = (await import("axios")).default;
+    jest.spyOn(axios, "get").mockResolvedValue({
+      data: `<html><head><meta property="article:published_time" content="2024-06-01T09:00:00Z"></head></html>`,
+    });
+
+    const result = await fetchArticlePublishedDate(
+      "https://example.com/article",
+    );
+    expect(result).toBe("2024-06-01T09:00:00.000Z");
+  });
+
+  it("returns undefined when the request fails", async () => {
+    const axios = (await import("axios")).default;
+    jest.spyOn(axios, "get").mockRejectedValue(new Error("Network error"));
+
+    const result = await fetchArticlePublishedDate(
+      "https://example.com/article",
+    );
+    expect(result).toBeUndefined();
   });
 });
 
