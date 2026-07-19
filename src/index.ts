@@ -12,15 +12,7 @@ const RSS_BASE_URL = "https://tldr.tech/api/rss";
 const MAX_DAYS = parseInt(process.env.MAX_DAYS || "10", 10);
 
 // Add rss feed to create a new one
-const feeds: string[] = [
-  "tech",
-  "ai",
-  "crypto",
-  "founders",
-  "design",
-  "devops",
-  "data",
-];
+const feeds: string[] = ["tech", "ai", "founders"];
 
 type NewsWithDate = News & { date: string };
 
@@ -74,11 +66,7 @@ const fetchFeeds = async (): Promise<NewsWithDate[]> => {
     }
 
     await writeRssFeed(feedName, feedNews);
-
-    // Generate HTML page for tech, ai, and design feeds
-    if (feedName === "tech" || feedName === "ai" || feedName === "design") {
-      await writeHtmlFeed(feedName, feedNews);
-    }
+    await writeHtmlFeed(feedName, feedNews);
 
     dateWithNews.push(...feedNews);
   }
