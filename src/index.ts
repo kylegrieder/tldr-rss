@@ -1,7 +1,7 @@
 import { setFailed, summary } from "@actions/core";
 
 import { writeHtmlFeed } from "./html";
-import { fetchNews, getRSSFeed } from "./news";
+import { fetchArticlePublishedDate, fetchNews, getRSSFeed } from "./news";
 import { writeRssFeed } from "./rss";
 import { News } from "./types";
 import { logger } from "./util";
@@ -12,15 +12,7 @@ const RSS_BASE_URL = "https://tldr.tech/api/rss";
 const MAX_DAYS = parseInt(process.env.MAX_DAYS || "10", 10);
 
 // Add rss feed to create a new one
-const feeds: string[] = [
-  "tech",
-  "ai",
-  "crypto",
-  "founders",
-  "design",
-  "devops",
-  "data",
-];
+const feeds: string[] = ["tech", "ai", "founders"];
 
 type NewsWithDate = News & { date: string };
 
@@ -52,22 +44,29 @@ const fetchFeeds = async (): Promise<NewsWithDate[]> => {
 
     for (const item of recentItems) {
       if (item.link && item.isoDate) {
-        logger.info(`Downloading news from ${item.link} for ${item.isoDate}`);
+        const digestDate = item.isoDate;
+        logger.info(`Downloading news from ${item.link} for ${digestDate}`);
         const news = await fetchNews(item.link);
         logger.debug(`Downloaded ${news.length} articles`);
-        for (const currentNews of news) {
+
+        const newsWithDates = await Promise.all(
+          news.map(async (currentNews) => {
+            const originalDate = await fetchArticlePublishedDate(
+              currentNews.link,
+            );
+            return { ...currentNews, date: originalDate ?? digestDate };
+          }),
+        );
+
+        for (const currentNews of newsWithDates) {
           logger.debug(JSON.stringify(currentNews));
-          feedNews.push({ ...currentNews, date: item.isoDate });
+          feedNews.push(currentNews);
         }
       }
     }
 
     await writeRssFeed(feedName, feedNews);
-
-    // Generate HTML page for tech, ai, and design feeds
-    if (feedName === "tech" || feedName === "ai" || feedName === "design") {
-      await writeHtmlFeed(feedName, feedNews);
-    }
+    await writeHtmlFeed(feedName, feedNews);
 
     dateWithNews.push(...feedNews);
   }

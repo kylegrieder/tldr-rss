@@ -3,6 +3,9 @@ import xml from "xml";
 
 import { logger } from "./util";
 
+const SITE_BASE_URL =
+  process.env.SITE_BASE_URL || "https://kylegrieder.github.io/tldr-rss";
+
 type Post = { title: string; date: string; content: string; link: string };
 
 function buildFeed(posts: Post[]) {
@@ -59,7 +62,7 @@ export const writeRssFeed = async (
           {
             "atom:link": {
               _attr: {
-                href: `https://bullrich.dev/tldr-rss/${feedName}.rss`,
+                href: `${SITE_BASE_URL}/${feedName}.rss`,
                 rel: "self",
                 type: "application/rss+xml",
               },
@@ -69,7 +72,7 @@ export const writeRssFeed = async (
             title: `TLDR ${feedName.toLocaleUpperCase()} Feed`,
           },
           {
-            link: "https://bullrich.dev/tldr-rss/",
+            link: `${SITE_BASE_URL}/`,
           },
           { description: "TLDR RSS Feed" },
           { language: "en-US" },
